@@ -31,6 +31,9 @@ class _TripsPageState extends State<TripsPage> {
   TextSelection currentSelection = TextSelection.none;
   final TextEditingController _fromController = TextEditingController();
   final TextEditingController _toController = TextEditingController();
+  final List<Stop> _fromStops = [];
+  final List<Stop> _toStops = [];
+
   static final List<Trip> _trips = [
     Trip(Stop("Brunnsparken"), Stop("Chalmers"), true),
     Trip(Stop("Centralstationen"), Stop("Lindholmen"), true),
@@ -69,35 +72,73 @@ class _TripsPageState extends State<TripsPage> {
     Stop("Valand"), Stop("Domkyrkan"), Stop("Vasaplatsen")
   ];
 
-  TripDisplayStrategy currentDisplayStrategy = RecentTripsDisplayStrategy(_trips);
+  static final List<Line> _lines = [
+    Line("1", "Bus", Stop("Brunnsparken"), Stop("Chalmers")),
+    Line("2", "Tram", Stop("Centralstationen"), Stop("Lindholmen")),
+    Line("3", "Bus", Stop("Järntorget"), Stop("Sahlgrenska")),
+    Line("4", "Tram", Stop("Korsvägen"), Stop("Liseberg")),
+    Line("5", "Bus", Stop("Nordstan"), Stop("Hjalmar Brantingsplatsen")),
+  ];
 
-  Widget _buildTextField(String labelText, TextEditingController controller) {
+  late TripDisplayStrategy currentDisplayStrategy;
+
+  Widget _buildTextField(String labelText, TextEditingController controller, List<Stop> selectedStops) {
     return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: TextField(
-        controller: controller,
-        decoration: InputDecoration(
-          labelText: labelText,
-          border: const OutlineInputBorder(),
-        ),
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Wrap(
+            spacing: 4.0,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(labelText, style: Theme.of(context).textTheme.labelSmall),
+              ...selectedStops.map((stop) {
+                return InputChip(
+                  label: Text(stop.name),
+                  onDeleted: () => setState(() => selectedStops.remove(stop)),
+                );
+              })
+            ],
+          ),
+          TextField(
+            controller: controller,
+            decoration: InputDecoration(
+              border: const OutlineInputBorder(),
+              hintText: 'Search for a stop',
+              suffixIcon: IconButton(onPressed: () => controller.clear(), icon: const Icon(Icons.clear)),
+            )
+          )
+        ]
+      )
     );
   }
 
-  List<Stop> searchStops(String search) => _stops.where((stop) => stop.name.toLowerCase().contains(search.toLowerCase())).toList();
-
   void setTripDisplay() {
-    switch (currentSelection) {
-      case TextSelection.from:
-        if (_fromController.text.isNotEmpty) {
-          setState(() => currentDisplayStrategy = StopSearchResultDisplayStrategy(searchStops(_fromController.text)));
-        }
-      case TextSelection.to:
-        if (_toController.text.isNotEmpty) {
-          setState(() => currentDisplayStrategy = StopSearchResultDisplayStrategy(searchStops(_toController.text)));
-        }
-      default:
-        setState(() => currentDisplayStrategy = RecentTripsDisplayStrategy(_trips));
+    List<Stop> searchStops(String search) => _stops.where((stop) => stop.name.toLowerCase().contains(search.toLowerCase())).toList();
+
+    if (_fromStops.isNotEmpty && _toStops.isNotEmpty) {
+      void onClick(Line line) => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Not implemented yet')));
+      setState(() => currentDisplayStrategy = LineSearchResultDisplayStrategy(_lines, onClick));
+    } else {
+      switch (currentSelection) {
+        case TextSelection.from:
+          if (_fromController.text.isNotEmpty) {
+            void onClick(Stop stop) => setState(() => setState(() => _fromStops.add(stop)));
+            setState(() => currentDisplayStrategy = StopSearchResultDisplayStrategy(searchStops(_fromController.text), onClick));
+          }
+        case TextSelection.to:
+          if (_toController.text.isNotEmpty) {
+            void onClick(Stop stop) => setState(() => setState(() => _toStops.add(stop)));
+            setState(() => currentDisplayStrategy = StopSearchResultDisplayStrategy(searchStops(_toController.text), onClick));
+          }
+        default:
+          void onClick(Trip trip) => setState(() {
+            _fromStops.add(trip.from);
+            _toStops.add(trip.to);
+          });
+          setState(() => currentDisplayStrategy = RecentTripsDisplayStrategy(_trips, onClick));
+      }
     }
   }
 
@@ -130,8 +171,8 @@ class _TripsPageState extends State<TripsPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.start,
           children: <Widget>[
-            _buildTextField("From: ", _fromController),
-            _buildTextField("To: ", _toController),
+            _buildTextField("From: ", _fromController, _fromStops),
+            _buildTextField("To: ", _toController, _toStops),
             Expanded(
               child: Container(
                 margin: const EdgeInsets.only(left: 8.0, right: 8.0),
@@ -172,42 +213,56 @@ class _TripsPageState extends State<TripsPage> {
 }
 
 abstract class TripDisplayStrategy<T> {
-  final T data;
-  TripDisplayStrategy(this.data);
+  final List<T> data;
+  final Function(T) onClick;
+  TripDisplayStrategy(this.data, this.onClick);
 
   Widget buildWidget(BuildContext context);
 }
 
-class RecentTripsDisplayStrategy implements TripDisplayStrategy<List<Trip>> {
+class RecentTripsDisplayStrategy implements TripDisplayStrategy<Trip> {
   @override
   final List<Trip> data;
-  RecentTripsDisplayStrategy(this.data);
+  @override
+  final Function(Trip) onClick;
+  RecentTripsDisplayStrategy(this.data, this.onClick);
 
   @override
   Widget buildWidget(BuildContext context) {
+    final List<Trip> favourites = data.where((trip) => trip.isFavorite).toList();
+    final List<Trip> recentSearches = data.where((trip) => !trip.isFavorite).toList();
+    Widget buildTripRow(Trip trip) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton(
+            onPressed: () => onClick(trip),
+            child: Text("${trip.from.name} -> ${trip.to.name}"),
+          )
+        )
+      );
+    }
+
     return ListView(
       children: <Widget>[
         Text("Favourites", style: Theme.of(context).textTheme.titleMedium),
-        for (Trip trip in data.where((trip) => trip.isFavorite))
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
-            child: Row(children: <Widget>[Text(trip.from.name), const Text(" -> "), Text(trip.to.name)]),
-          ),
+        for (Trip trip in favourites)
+          buildTripRow(trip),
         Text("Recent searches", style: Theme.of(context).textTheme.titleMedium),
-        for (Trip trip in data.where((trip) => !trip.isFavorite))
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
-            child: Row(children: <Widget>[Text(trip.from.name), const Text(" -> "), Text(trip.to.name)]),
-          )
+        for (Trip trip in recentSearches)
+          buildTripRow(trip),
       ],
     );
   }
 }
 
-class StopSearchResultDisplayStrategy implements TripDisplayStrategy<List<Stop>> {
+class StopSearchResultDisplayStrategy implements TripDisplayStrategy<Stop> {
   @override
   final List<Stop> data;
-  StopSearchResultDisplayStrategy(this.data);
+  @override
+  final Function(Stop) onClick;
+  StopSearchResultDisplayStrategy(this.data, this.onClick);
 
   @override
   Widget buildWidget(BuildContext context) {
@@ -215,18 +270,26 @@ class StopSearchResultDisplayStrategy implements TripDisplayStrategy<List<Stop>>
       children: <Widget>[
         for (Stop stop in data)
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
-            child: Row(children: <Widget>[Text(stop.name)]),
-          ),
-      ],
+            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: () => onClick(stop),
+                child: Text(stop.name),
+              )
+            )
+          )
+      ]
     );
   }
 }
 
-class LineSearchResultDisplayStrategy implements TripDisplayStrategy<List<Line>> {
+class LineSearchResultDisplayStrategy implements TripDisplayStrategy<Line> {
   @override
   final List<Line> data;
-  LineSearchResultDisplayStrategy(this.data);
+  @override
+  final Function(Line) onClick;
+  LineSearchResultDisplayStrategy(this.data, this.onClick);
 
   @override
   Widget buildWidget(BuildContext context) {
@@ -234,7 +297,7 @@ class LineSearchResultDisplayStrategy implements TripDisplayStrategy<List<Line>>
       children: <Widget>[
         for (Line line in data)
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+            padding: const EdgeInsets.all(8.0),
             child: Row(children: <Widget>[Text(line.id), Text("From: ${line.from.name}"), Text("To: ${line.to.name}")]),
           ),
       ],
