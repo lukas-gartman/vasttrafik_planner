@@ -31,6 +31,8 @@ class _TripsPageState extends State<TripsPage> {
   TextSelection currentSelection = TextSelection.none;
   final TextEditingController _fromController = TextEditingController();
   final TextEditingController _toController = TextEditingController();
+  final FocusNode _fromFocus = FocusNode();
+  final FocusNode _toFocus = FocusNode();
   final List<Stop> _fromStops = [];
   final List<Stop> _toStops = [];
 
@@ -82,7 +84,7 @@ class _TripsPageState extends State<TripsPage> {
 
   late TripDisplayStrategy currentDisplayStrategy;
 
-  Widget _buildTextField(String labelText, TextEditingController controller, List<Stop> selectedStops) {
+  Widget _buildTextField(String labelText, TextEditingController controller, FocusNode focusNode, List<Stop> selectedStops) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
       child: Column(
@@ -93,19 +95,20 @@ class _TripsPageState extends State<TripsPage> {
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Text(labelText, style: Theme.of(context).textTheme.labelSmall),
-              ...selectedStops.map((stop) {
+              ...(selectedStops.map((stop) {
                 return InputChip(
                   label: Text(stop.name),
                   onDeleted: () => setState(() => selectedStops.remove(stop)),
                 );
-              })
+              }))
             ],
           ),
           TextField(
             controller: controller,
+            focusNode: focusNode,
             decoration: InputDecoration(
               border: const OutlineInputBorder(),
-              hintText: 'Search for a stop',
+              hintText: selectedStops.isEmpty ? "Search for a stop" : "Search for another stop",
               suffixIcon: IconButton(onPressed: () => controller.clear(), icon: const Icon(Icons.clear)),
             )
           )
@@ -117,21 +120,27 @@ class _TripsPageState extends State<TripsPage> {
   void setTripDisplay() {
     List<Stop> searchStops(String search) => _stops.where((stop) => stop.name.toLowerCase().contains(search.toLowerCase())).toList();
 
-    if (_fromStops.isNotEmpty && _toStops.isNotEmpty) {
+    if (_fromStops.isNotEmpty && _toStops.isNotEmpty && currentSelection == TextSelection.none) {
       void onClick(Line line) => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Not implemented yet')));
       setState(() => currentDisplayStrategy = LineSearchResultDisplayStrategy(_lines, onClick));
     } else {
       switch (currentSelection) {
         case TextSelection.from:
-          if (_fromController.text.isNotEmpty) {
-            void onClick(Stop stop) => setState(() => setState(() => _fromStops.add(stop)));
-            setState(() => currentDisplayStrategy = StopSearchResultDisplayStrategy(searchStops(_fromController.text), onClick));
-          }
+          void onClick(Stop stop) => setState(() {
+            _fromStops.add(stop);
+            _fromController.clear();
+            _fromFocus.unfocus();
+            _toStops.isEmpty ? _toFocus.requestFocus() : null;
+          });
+          setState(() => currentDisplayStrategy = StopSearchResultDisplayStrategy(searchStops(_fromController.text), onClick));
         case TextSelection.to:
-          if (_toController.text.isNotEmpty) {
-            void onClick(Stop stop) => setState(() => setState(() => _toStops.add(stop)));
-            setState(() => currentDisplayStrategy = StopSearchResultDisplayStrategy(searchStops(_toController.text), onClick));
-          }
+          void onClick(Stop stop) => setState(() {
+            _toStops.add(stop);
+            _toController.clear();
+            _toFocus.unfocus();
+            _fromStops.isEmpty ? _fromFocus.requestFocus() : null;
+          });
+          setState(() => currentDisplayStrategy = StopSearchResultDisplayStrategy(searchStops(_toController.text), onClick));
         default:
           void onClick(Trip trip) => setState(() {
             _fromStops.add(trip.from);
@@ -146,8 +155,8 @@ class _TripsPageState extends State<TripsPage> {
   void initState() {
     super.initState();
 
-    _fromController.addListener(() => setState(() => currentSelection = (_fromController.text.isEmpty && _toController.text.isEmpty) ? TextSelection.none : TextSelection.from));
-    _toController.addListener(() => setState(() => currentSelection = (_fromController.text.isEmpty && _toController.text.isEmpty) ? TextSelection.none : TextSelection.to));
+    _fromFocus.addListener(() => setState(() => currentSelection = _fromFocus.hasFocus ? TextSelection.from : TextSelection.none));
+    _toFocus.addListener(() => setState(() => currentSelection = _toFocus.hasFocus ? TextSelection.to : TextSelection.none));
   }
 
   @override
@@ -171,8 +180,8 @@ class _TripsPageState extends State<TripsPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.start,
           children: <Widget>[
-            _buildTextField("From: ", _fromController, _fromStops),
-            _buildTextField("To: ", _toController, _toStops),
+            _buildTextField("From: ", _fromController, _fromFocus, _fromStops),
+            _buildTextField("To: ", _toController, _toFocus, _toStops),
             Expanded(
               child: Container(
                 margin: const EdgeInsets.only(left: 8.0, right: 8.0),
