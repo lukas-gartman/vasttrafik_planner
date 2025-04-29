@@ -1,3 +1,6 @@
+.credentials
+.env
+
 # Miscellaneous
 *.class
 *.log
