@@ -1,16 +1,17 @@
-# vasttrafik_planner
+# Västtrafik Multi-Planner
 
-A new Flutter project.
+Västtrafik Multi-Planner is an alternative to the official Västtrafik travel planner app built with Flutter. It is currently under development and aims to improve the travel planning experience for public transport users in the Gothenburg area.
 
-## Getting Started
+![vasttrafik_multi_planner](https://github.com/user-attachments/assets/11ebe6a5-ac9c-4fdf-876e-657398632923)
 
-This project is a starting point for a Flutter application.
 
-A few resources to get you started if this is your first Flutter project:
+## Current Features
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+### Multi-Stop Search
+Plan trips that span multiple nearby stops in a single search. For example, if you're going to Chalmers, you can include both Chalmers and Chalmers Tvärgata in the same search instead of checking them separately.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+### Distance Sorting
+Unlike the official app, which often shows distant results before more relevant local ones, this app fixes that by sorting results by distance and also showing how far each stop is from your current location.
+
+### Real-time Journey Tracking
+View real-time information about your trip, including delays, estimated departure and arrival times, your current location, the full route, and where the vehicle is on the map.
